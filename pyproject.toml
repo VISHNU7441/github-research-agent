@@ -1,0 +1,16 @@
+[project]
+name = "github-research-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "fpdf2>=2.9.0",
+    "langchain>=1.4.9",
+    "langchain-aws>=1.9.1",
+    "langchain-tavily>=0.2.18",
+    "pydantic>=2.14.2",
+    "python-dotenv>=1.2.4",
+    "requests>=2.34.2",
+]

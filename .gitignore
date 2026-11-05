@@ -1,0 +1,14 @@
+# secrets
+.env
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# runtime output (generated every run)
+data/
+reports/
+
+# macOS
+.DS_Store
