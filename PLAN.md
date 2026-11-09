@@ -64,11 +64,23 @@ main.py (plain code)
 - `.env` (gitignored): `GITHUB_TOKEN`, `TAVILY_API_KEY`, `AWS_REGION=ap-southeast-2`, and `AWS_PROFILE` if needed. AWS keys are not stored here; they live in `~/.aws/credentials` from `aws configure`.
 - `.env.example` (committed): the same variable names with empty values, so anyone who clones the repo knows which keys to add.
 - `.gitignore` covers `.env`, `.venv/`, `__pycache__/`, `data/`, `reports/` and `.DS_Store`.
-- `config.py`: model ID, region, truncation limits, paths.
-- `trending.py`, `github_tools.py`, `search_tools.py`, `schemas.py`, `agent.py`, `history.py`, `report.py`, `main.py`, `README.md`.
+- Code is grouped into packages by job. Every folder has an empty `__init__.py`:
+  ```
+  main.py                  the daily run (uv run main.py)
+  config.py                settings, kept at the top so every module can import it
+  sources/trending.py      Step 3: scrape github.com/trending
+  tools/github_tools.py    Step 4: GitHub API tools for the agent
+  tools/search_tools.py    Step 7: Tavily competitor search
+  agent/schemas.py         Step 6a: RepoAnalysis (Pydantic)
+  agent/researcher.py      Step 5: the agent
+  storage/history.py       Step 8: SQLite history
+  reporting/pdf_report.py  Step 10: the PDF
+  assets/fonts/            PDF font
+  ```
+- Run a single module from the project root with `uv run python -m <package>.<module>` (e.g. `uv run python -m tools.github_tools`). That keeps the root on Python's import path, so `from config import ...` works everywhere.
 - Output goes to `reports/YYYY-MM-DD.pdf`. Commit one sample PDF for the portfolio.
 
-`schemas.py` defines `RepoAnalysis` with these fields: `repo`, `one_line_summary`, `category` (library/app/tool/list/tutorial/other), `license`, `license_commercial` (permissive/copyleft/none/unknown), `verdict` (strong/maybe/none), `opportunity_score` (1–10), `business_idea`, `product_type`, `target_customers: list[TargetCustomer(segment, pain_point, why_they_pay)]`, `competitors`, `risks` and `evidence`.
+`agent/schemas.py` defines `RepoAnalysis` with these fields: `repo`, `one_line_summary`, `category` (library/framework/app/tool/model/list/tutorial/other), `license`, `license_commercial` (permissive/copyleft/none/unknown), `verdict` (strong/maybe/none), `opportunity_score` (1–10), `business_idea`, `product_type`, `target_customers: list[TargetCustomer(segment, pain_point, why_they_pay)]`, `competitors`, `risks` and `evidence`.
 
 ## Step-by-step roadmap (one step per session chunk)
 0. **AWS and keys setup.**
@@ -98,7 +110,9 @@ Stretch goals: re-analyse after N days or when stars jump; LangSmith tracing (le
 - [x] **Step 0:** IAM user, AWS CLI, budget alert, GitHub token, Tavily key. The Bedrock test is blocked by quotas (see below).
 - [x] **Step 1:** uv project, `.gitignore`, `.env`, `config.py`. `uv run config.py` passes.
 - [ ] **Step 2:** blocked until AWS opens Bedrock access for this account (see below).
-- [ ] **Step 3:** `trending.py` (in progress).
+- [x] **Step 3:** `sources/trending.py`. The daily list varies in length (9–11 repos seen, not 25).
+- [x] **Step 4:** `tools/github_tools.py`: 5 tools, errors returned as text, authenticated (5,000 requests/hour).
+- [ ] **Step 6a:** `agent/schemas.py` (next).
 
 ## Setup issues and lessons learned
 These are worth keeping for the README:
