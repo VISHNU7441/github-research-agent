@@ -8,10 +8,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()  # copies the KEY=value lines from .env into os.environ
-
 # --- Paths ---
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")   # always this project's .env, whatever folder you run from
+
 DATA_DIR = BASE_DIR / "data"          # SQLite history (gitignored)
 REPORTS_DIR = BASE_DIR / "reports"    # daily PDFs (gitignored)
 DB_PATH = DATA_DIR / "history.db"
@@ -35,6 +35,8 @@ MAX_FILE_CHARS = 4_000
 MAX_ISSUES = 10
 RECURSION_LIMIT = 25    # LangGraph steps per repo: each model call and each tool round is 1 step
 HTTP_TIMEOUT = 20       # seconds before a GitHub/trending request gives up
+MAX_SEARCH_RESULTS = 5   # web results per search (more results = more tokens)
+
 
 DATA_DIR.mkdir(exist_ok=True)
 REPORTS_DIR.mkdir(exist_ok=True)
