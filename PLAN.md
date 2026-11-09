@@ -47,6 +47,7 @@ main.py (plain code)
   - Truncate tool output: README to about 8k characters, other files to about 4k, to keep token use down.
   - Tools return error strings instead of raising, so the agent can recover from a 404.
   - Set a recursion limit (about 10 tool calls per repo).
+  - Limit the paid tool in code, not just in the prompt: `ToolCallLimitMiddleware(tool_name="web_search", run_limit=2)` (Step 5).
   - Start a fresh agent for each repo, so analyses don't leak into each other.
 - **GitHub access:**
   - Use the REST API with a fine-grained, read-only token from `.env`. That allows 5,000 requests/hour instead of 60.
@@ -112,7 +113,9 @@ Stretch goals: re-analyse after N days or when stars jump; LangSmith tracing (le
 - [ ] **Step 2:** blocked until AWS opens Bedrock access for this account (see below).
 - [x] **Step 3:** `sources/trending.py`. The daily list varies in length (9–11 repos seen, not 25).
 - [x] **Step 4:** `tools/github_tools.py`: 5 tools, errors returned as text, authenticated (5,000 requests/hour).
-- [ ] **Step 6a:** `agent/schemas.py` (next).
+- [x] **Step 6a:** `agent/schemas.py`: `RepoAnalysis` and `TargetCustomer` with `Literal` choices and a 1–10 score. Rule: the model fills in judgments; our code overwrites facts it already knows (`repo`, `license`).
+- [x] **Step 7:** `tools/search_tools.py`: `web_search` wraps Tavily (short results, errors as text). `config.py` now loads `.env` by exact path.
+- [ ] **Step 8:** `storage/history.py` (next).
 
 ## Setup issues and lessons learned
 These are worth keeping for the README:
