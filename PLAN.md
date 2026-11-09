@@ -88,15 +88,17 @@ main.py (plain code)
 10. **`report.py`.** The PDF: cover with counts, summary table sorted by score, a page per repo, the "seen before" appendix.
 11. **README.** Architecture diagram, design decisions (why only part of it is an agent, the license check, skipping known repos), setup, limits, sample PDF.
 
-**Order while waiting for Bedrock:** Steps 3 and 4 need no model, so they are done before Step 2.
+**Order while waiting for Bedrock.** Decision (2026-11-09): no stand-in model provider; the project stays on Bedrock. Everything that doesn't need a model is built first:
+- **Now, no model needed:** 3 → 4 → 6a (`schemas.py`, the Pydantic schema only) → 7 → 8 → 10 → 9a (`main.py` with a *fake* analyser that returns a hand-made `RepoAnalysis`, so the whole pipeline runs end to end and produces a real PDF).
+- **Once Bedrock access opens:** 2 → 5 → 6b (structured output in the agent) → 9b (swap the fake analyser for the real agent) → 11.
 
 Stretch goals: re-analyse after N days or when stars jump; LangSmith tracing (leads into the eval_and_observability project); a daily local run with launchd or cron; deploy later with Lambda, EventBridge and S3.
 
 ## Progress
 - [x] **Step 0:** IAM user, AWS CLI, budget alert, GitHub token, Tavily key. The Bedrock test is blocked by quotas (see below).
 - [x] **Step 1:** uv project, `.gitignore`, `.env`, `config.py`. `uv run config.py` passes.
-- [ ] **Step 2:** waiting for the Bedrock quota increase.
-- [ ] **Step 3:** `trending.py` (next).
+- [ ] **Step 2:** blocked until AWS opens Bedrock access for this account (see below).
+- [ ] **Step 3:** `trending.py` (in progress).
 
 ## Setup issues and lessons learned
 These are worth keeping for the README:
@@ -104,7 +106,12 @@ These are worth keeping for the README:
 2. **"Too many tokens per day"** (ThrottlingException), even on a 20-token test:
    - It wasn't the region, IAM or `maxTokens`. Calls failed the same way in us-east-1 and ap-southeast-2 with three different model IDs.
    - Reading the quotas showed the cause. The account-wide "Cross-Model Max Tokens Per Day" was 150M, but **every per-model quota was 0**: Nova 2 Lite tokens per day, tokens per minute and requests per minute. New accounts can start below AWS's defaults.
-   - Fix: in Service Quotas (Sydney), requested increases for "Global cross-region model inference tokens per minute for Amazon Nova 2 Lite" and "... requests per minute ...". Support then raises the daily quota as well. Submitted 2026-11-05; status: case opened.
+   - Tried: in Service Quotas (Sydney), requested increases for "Global cross-region model inference tokens per minute for Amazon Nova 2 Lite" and "... requests per minute ...". AWS **declined** the same day: "unable to approve your request at this time … model access may depend on … account history and usage patterns … subject to change automatically as time passes."
+   - Many re:Post threads in 2026 describe the same thing, and AWS's usual advice is to build account history over at least one billing cycle.
+   - Next tries:
+     - An "Account and billing" support case asking for account verification and setup of the default quotas (not an "increase").
+     - The Explore AWS credit activities (Lambda, EC2, RDS) as normal usage.
+     - Ask again in early December, after the first billing cycle.
 3. **Throttle versus access denied:** a throttle means the request reached the model and was refused by a quota, so IAM and model access are fine. Access denied points to permissions or model access.
 4. **New AWS sign-up and regions:** the home region is fixed by the contact country (Sydney here), and Free-plan accounts don't support cross-region features. Check the region in AWS Settings, under Projects, then Additional info.
 
