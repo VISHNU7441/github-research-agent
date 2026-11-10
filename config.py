@@ -18,8 +18,11 @@ DB_PATH = DATA_DIR / "history.db"
 
 # --- Amazon Bedrock ---
 AWS_REGION = os.getenv("AWS_REGION", "ap-southeast-2")
-MODEL_ID = "global.amazon.nova-2-lite-v1:0"
+MODEL_ID = "openai.gpt-oss-120b"
+MANTLE_BASE_URL = f"https://bedrock-mantle.{AWS_REGION}.api.aws/v1"
 TEMPERATURE = 0.2                      # low = steadier, less "creative" analysis
+MAX_OUTPUT_TOKENS = 4_000              # cap per model call (also caps cost)
+
 
 # --- GitHub ---
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]

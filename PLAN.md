@@ -27,13 +27,14 @@ main.py (plain code)
 ```
 
 ## Key decisions
-- **Model:** Amazon Nova 2 Lite, `global.amazon.nova-2-lite-v1:0` called from ap-southeast-2 (Sydney) through `langchain_aws.ChatBedrockConverse`.
-  - It's Amazon's own model, so there's no Marketplace subscription or use-case form. It fits the free plan, supports tool use and has a 1M-token context.
-  - **Why Sydney:** the account was made with AWS's new sign-up ("projects"), which fixes the home region from the contact address. Free-plan accounts of this type don't support cross-region features, so the project stays in its home region.
-  - **Why `global.`:** called from Sydney, Nova 2 Lite has no Australia-only or Asia-only profile (`au.` is an invalid ID). The global profile can process requests in any commercial region, which is fine because only public GitHub data is sent.
-  - The model ID and region live in `config.py` and `.env`, so they can be swapped later, for example to Claude Haiku 4.5 once Anthropic access is enabled.
-- **Throttling:** pass `botocore.config.Config(retries={"mode": "adaptive", "max_attempts": 10})` to the model, and always set `maxTokens`. Bedrock sets aside input tokens plus `maxTokens` from the quota before each call, so an unset `maxTokens` wastes quota.
-- **Structured output:** `create_agent(..., response_format=RepoAnalysis)` and read `result["structured_response"]`. If Bedrock rejects provider-native structured output, fall back to `ToolStrategy(RepoAnalysis)`, which works with any model that can call tools.
+- **Model (decided 2026-11-10):** `openai.gpt-oss-120b` (OpenAI's open-weight model) on **Amazon Bedrock's `bedrock-mantle` endpoint** in ap-southeast-2 (Sydney), called through `langchain_openai.ChatOpenAI`.
+  - **Why mantle:** this account's `bedrock-runtime` quotas (the Converse API) are blocked for new accounts; see the lessons learned below. Mantle has **separate quotas**, and its open-weight models work. Tested on 7 models, all of which made correct tool calls; gpt-oss-120b answered in under 3 s.
+  - **Why `ChatOpenAI`:** mantle speaks the OpenAI API format (`base_url = https://bedrock-mantle.ap-southeast-2.api.aws/v1`). It's still AWS Bedrock, billed to the AWS account.
+  - **Authentication:** a short-term Bedrock token (12 h at most) made from the `bedrock-dev` AWS credentials at the start of each run with `aws_bedrock_token_generator.provide_token()`. There is no long-lived secret.
+  - **Why Sydney:** the account was made with AWS's new sign-up ("projects"), which fixes the home region. Mantle works there, so there are no cross-region concerns.
+  - The model ID lives in `config.py`, so switching (e.g. to `qwen.qwen3-235b-a22b-2507`) is one line. Nova 2 Lite on `bedrock-runtime` stays the original plan, for when the account block lifts.
+- **Retries and limits:** `ChatOpenAI(max_retries=5, timeout=120)`, and always set `max_tokens`. Mantle quotas are input and output tokens per minute.
+- **Structured output:** `create_agent(..., response_format=RepoAnalysis)` and read `result["structured_response"]`. Tested with gpt-oss-120b: it works, and the agent calls the schema as a final tool. Don't use `model.with_structured_output(method="json_schema")` with this model: it returned a stray character before the JSON.
 - **Prompt rules against generic ideas:**
   - Score with a rubric: pain point, who pays, maturity, competition.
   - Every claim must cite evidence from the repo.
@@ -61,7 +62,7 @@ main.py (plain code)
 - **PDF:** `fpdf2` (pure Python). Bundle a DejaVuSans TTF in `assets/fonts/` for Unicode. Strip emoji, and use the model's English summary instead of the raw descriptions, which are sometimes in Chinese.
 
 ## Files (in `system_with_tool_call/github_research_agent/`)
-- `pyproject.toml`: created with `uv init --no-workspace --python 3.12`, because a plain `uv init` would join the home folder's uv workspace. Dependencies: `langchain`, `langchain-aws`, `langchain-tavily`, `requests`, `beautifulsoup4`, `python-dotenv`, `fpdf2`, `pydantic`.
+- `pyproject.toml`: created with `uv init --no-workspace --python 3.12`, because a plain `uv init` would join the home folder's uv workspace. Dependencies: `langchain`, `langchain-openai`, `aws-bedrock-token-generator`, `langchain-tavily`, `requests`, `beautifulsoup4`, `python-dotenv`, `fpdf2`, `pydantic`.
 - `.env` (gitignored): `GITHUB_TOKEN`, `TAVILY_API_KEY`, `AWS_REGION=ap-southeast-2`, and `AWS_PROFILE` if needed. AWS keys are not stored here; they live in `~/.aws/credentials` from `aws configure`.
 - `.env.example` (committed): the same variable names with empty values, so anyone who clones the repo knows which keys to add.
 - `.gitignore` covers `.env`, `.venv/`, `__pycache__/`, `data/`, `reports/` and `.DS_Store`.
@@ -72,6 +73,7 @@ main.py (plain code)
   sources/trending.py      Step 3: scrape github.com/trending
   tools/github_tools.py    Step 4: GitHub API tools for the agent
   tools/search_tools.py    Step 7: Tavily competitor search
+  agent/llm.py             Step 2: the Bedrock (mantle) chat model
   agent/schemas.py         Step 6a: RepoAnalysis (Pydantic)
   agent/researcher.py      Step 5: the agent
   storage/history.py       Step 8: SQLite history
@@ -85,7 +87,7 @@ main.py (plain code)
 
 ## Step-by-step roadmap (one step per session chunk)
 0. **AWS and keys setup.**
-   - Create an IAM user (`bedrock-dev`) rather than using the root account, and run `aws configure` with region ap-southeast-2. Its policy allows `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream`, plus the AWS-managed `ServiceQuotasReadOnlyAccess` for checking quotas.
+   - Create an IAM user (`bedrock-dev`) rather than using the root account, and run `aws configure` with region ap-southeast-2. Its policy allows `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream`, plus the AWS-managed `ServiceQuotasReadOnlyAccess` (checking quotas) and `AmazonBedrockMantleInferenceAccess` (calling models on the mantle endpoint).
    - Try Nova 2 Lite in the Bedrock playground. This also earns the $20 Bedrock credit activity.
    - Create an AWS Budget alert at about $5. This earns the $20 Budgets credit activity.
    - Get a GitHub fine-grained token and a Tavily key.
@@ -101,9 +103,7 @@ main.py (plain code)
 10. **`report.py`.** The PDF: cover with counts, summary table sorted by score, a page per repo, the "seen before" appendix.
 11. **README.** Architecture diagram, design decisions (why only part of it is an agent, the license check, skipping known repos), setup, limits, sample PDF.
 
-**Order while waiting for Bedrock.** Decision (2026-11-09): no stand-in model provider; the project stays on Bedrock. Everything that doesn't need a model is built first:
-- **Now, no model needed:** 3 → 4 → 6a (`schemas.py`, the Pydantic schema only) → 7 → 8 → 10 → 9a (`main.py` with a *fake* analyser that returns a hand-made `RepoAnalysis`, so the whole pipeline runs end to end and produces a real PDF).
-- **Once Bedrock access opens:** 2 → 5 → 6b (structured output in the agent) → 9b (swap the fake analyser for the real agent) → 11.
+**Order.** Decision (2026-11-09): no stand-in model provider; the project stays on Bedrock. The no-model steps (3, 4, 6a, 7, 8, 10) were built first. On 2026-11-10 Bedrock opened through mantle, and the fake analyser was dropped (the user's choice). Remaining order: **2** (Hello Bedrock through mantle) → **5** → **6b** → **9** (`main.py` with the real agent) → **11**.
 
 Stretch goals: re-analyse after N days or when stars jump; LangSmith tracing (leads into the eval_and_observability project); a daily local run with launchd or cron; deploy later with Lambda, EventBridge and S3.
 
@@ -115,7 +115,10 @@ Stretch goals: re-analyse after N days or when stars jump; LangSmith tracing (le
 - [x] **Step 4:** `tools/github_tools.py`: 5 tools, errors returned as text, authenticated (5,000 requests/hour).
 - [x] **Step 6a:** `agent/schemas.py`: `RepoAnalysis` and `TargetCustomer` with `Literal` choices and a 1–10 score. Rule: the model fills in judgments; our code overwrites facts it already knows (`repo`, `license`).
 - [x] **Step 7:** `tools/search_tools.py`: `web_search` wraps Tavily (short results, errors as text). `config.py` now loads `.env` by exact path.
-- [ ] **Step 8:** `storage/history.py` (next).
+- [x] **Step 8:** `storage/history.py`: `analyses` and `sightings` tables, `INSERT OR REPLACE` (safe to re-run), tested on an in-memory database across two simulated days.
+- [x] **Step 10:** `reporting/pdf_report.py`: summary table, a page per repo, a seen/failed page. DejaVu fonts in `assets/fonts/`; `clean()` normalises full-width characters (NFKC) and strips CJK and emoji.
+- [ ] **Step 2:** `agent/llm.py`, Hello Bedrock through mantle with gpt-oss-120b (next).
+- [ ] **Step 9:** `main.py`. Design kept from the fake-analyser test: the analyser is passed into `run()`, each repo is in its own try/except, the repo name is overwritten with the known value, a same-day re-run keeps that day's analyses in the report, and our logger runs at INFO while libraries stay at WARNING. `clean()` also needs NFKC normalisation and the full-width range, because full-width '：，' were missing glyphs.
 
 ## Setup issues and lessons learned
 These are worth keeping for the README:
@@ -131,6 +134,10 @@ These are worth keeping for the README:
      - Ask again in early December, after the first billing cycle.
 3. **Throttle versus access denied:** a throttle means the request reached the model and was refused by a quota, so IAM and model access are fine. Access denied points to permissions or model access.
 4. **New AWS sign-up and regions:** the home region is fixed by the contact country (Sydney here), and Free-plan accounts don't support cross-region features. Check the region in AWS Settings, under Projects, then Additional info.
+5. **The fix: Bedrock's second endpoint, `bedrock-mantle`.** AWS's quota docs say `bedrock-runtime` and `bedrock-mantle` "each [have] its own per-model quota allocations".
+   - Changing region didn't help. In us-west-2 the quotas showed the full defaults (Nova 2 Lite 11.5B tokens/day), yet calls were still throttled, so the block is account-level on `bedrock-runtime`.
+   - After attaching `AmazonBedrockMantleInferenceAccess` to the IAM user, mantle's open-weight models worked in Sydney, with tool calling, through the OpenAI-compatible API and a short-term Bedrock token.
+   - GPT-5.6 on mantle is separately restricted ("not available for this account").
 
 ## Verification
 - Each module has an `if __name__ == "__main__":` smoke test that's run as its step is finished.

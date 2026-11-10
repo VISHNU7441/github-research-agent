@@ -5,10 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aws-bedrock-token-generator>=1.1.0",
     "beautifulsoup4>=4.15.0",
     "fpdf2>=2.9.0",
     "langchain>=1.4.9",
-    "langchain-aws>=1.9.1",
+    "langchain-openai>=1.7.4",
     "langchain-tavily>=0.2.18",
     "pydantic>=2.14.2",
     "python-dotenv>=1.2.4",
