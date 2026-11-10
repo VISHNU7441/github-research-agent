@@ -37,7 +37,6 @@ RECURSION_LIMIT = 25    # LangGraph steps per repo: each model call and each too
 HTTP_TIMEOUT = 20       # seconds before a GitHub/trending request gives up
 MAX_SEARCH_RESULTS = 5   # web results per search (more results = more tokens)
 
-
 DATA_DIR.mkdir(exist_ok=True)
 REPORTS_DIR.mkdir(exist_ok=True)
 
