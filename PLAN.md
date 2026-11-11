@@ -121,7 +121,7 @@ Stretch goals: re-analyse after N days or when stars jump; LangSmith tracing (le
 - [x] **Step 5:** `agent/researcher.py`, the first agent. Calls get_repo_info, get_readme, web_search; the third search was blocked by `ToolCallLimitMiddleware`. About 13k input tokens over 6 calls.
 - [x] **Step 6b:** structured `RepoAnalysis` with computed score, rubric prompt, text-JSON fallback, license taken from GitHub. Scores vary between runs (sherlock 7-8, mujoco 6-9): sampling plus different search results.
 - [x] **Step 9:** `main.py`, the real daily run. 2026-11-11: 12/12 trending repos researched over incremental runs, 0 failed; `reports/2026-11-11.pdf`.
-- [ ] **Step 11:** README (next).
+- [x] **Step 11:** README: use case, Mermaid system and agent-loop diagrams, why mantle, design decisions, setup, usage, cost, limitations, roadmap, lessons. Sample report and page images in `docs/`.
 
 ## Setup issues and lessons learned
 These are worth keeping for the README:
