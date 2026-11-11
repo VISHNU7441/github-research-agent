@@ -47,7 +47,7 @@ main.py (plain code)
 - **Guardrails in the tools:**
   - Truncate tool output: README to about 8k characters, other files to about 4k, to keep token use down.
   - Tools return error strings instead of raising, so the agent can recover from a 404.
-  - Set a recursion limit (about 10 tool calls per repo).
+  - Set a recursion limit: `RECURSION_LIMIT = 40`. Middleware adds a step to each round (model, then the middleware check, then tools), so 25 ran out after about 8 rounds.
   - Limit the paid tool in code, not just in the prompt: `ToolCallLimitMiddleware(tool_name="web_search", run_limit=2)` (Step 5).
   - Start a fresh agent for each repo, so analyses don't leak into each other.
 - **GitHub access:**
@@ -83,7 +83,7 @@ main.py (plain code)
 - Run a single module from the project root with `uv run python -m <package>.<module>` (e.g. `uv run python -m tools.github_tools`). That keeps the root on Python's import path, so `from config import ...` works everywhere.
 - Output goes to `reports/YYYY-MM-DD.pdf`. Commit one sample PDF for the portfolio.
 
-`agent/schemas.py` defines `RepoAnalysis` with these fields: `repo`, `one_line_summary`, `category` (library/framework/app/tool/model/list/tutorial/other), `license`, `license_commercial` (permissive/copyleft/none/unknown), `verdict` (strong/maybe/none), `opportunity_score` (1–10), `business_idea`, `product_type`, `target_customers: list[TargetCustomer(segment, pain_point, why_they_pay)]`, `competitors`, `risks` and `evidence`.
+`agent/schemas.py` defines `RepoAnalysis`. The model fills in `repo`, `one_line_summary`, `category`, `license`, `license_commercial`, `score_breakdown: ScoreBreakdown(pain 0-3, buyer 0-2, maturity 0-2, room 0-2, license 0-1)`, `business_idea`, `product_type`, `target_customers: list[TargetCustomer]`, `competitors`, `risks` and `evidence`. **`opportunity_score` and `verdict` are computed in code** (`@computed_field`): the sum of the breakdown, capped at 3 with no license and at 2 for lists and tutorials; 7+ strong, 4-6 maybe, 3 or less none. A `model_validator` enforces that `room` is at most 1 when competitors exist. Reason: in testing, the model's total didn't match its own breakdown.
 
 ## Step-by-step roadmap (one step per session chunk)
 0. **AWS and keys setup.**
@@ -117,7 +117,9 @@ Stretch goals: re-analyse after N days or when stars jump; LangSmith tracing (le
 - [x] **Step 7:** `tools/search_tools.py`: `web_search` wraps Tavily (short results, errors as text). `config.py` now loads `.env` by exact path.
 - [x] **Step 8:** `storage/history.py`: `analyses` and `sightings` tables, `INSERT OR REPLACE` (safe to re-run), tested on an in-memory database across two simulated days.
 - [x] **Step 10:** `reporting/pdf_report.py`: summary table, a page per repo, a seen/failed page. DejaVu fonts in `assets/fonts/`; `clean()` normalises full-width characters (NFKC) and strips CJK and emoji.
-- [ ] **Step 2:** `agent/llm.py`, Hello Bedrock through mantle with gpt-oss-120b (next).
+- [x] **Step 2:** `agent/llm.py`: `get_model()` returns `ChatOpenAI` pointed at mantle, gpt-oss-120b; the first call used 77 input + 82 output tokens.
+- [x] **Step 5:** `agent/researcher.py`, the first agent. Calls get_repo_info, get_readme, web_search; the third search was blocked by `ToolCallLimitMiddleware`. About 13k input tokens over 6 calls.
+- [ ] **Step 6b:** structured output, rubric, computed score (next). Tested on 4 repos; scores now differ (for example skills 6, sherlock 7-8).
 - [ ] **Step 9:** `main.py`. Design kept from the fake-analyser test: the analyser is passed into `run()`, each repo is in its own try/except, the repo name is overwritten with the known value, a same-day re-run keeps that day's analyses in the report, and our logger runs at INFO while libraries stay at WARNING. `clean()` also needs NFKC normalisation and the full-width range, because full-width '：，' were missing glyphs.
 
 ## Setup issues and lessons learned
@@ -138,6 +140,10 @@ These are worth keeping for the README:
    - Changing region didn't help. In us-west-2 the quotas showed the full defaults (Nova 2 Lite 11.5B tokens/day), yet calls were still throttled, so the block is account-level on `bedrock-runtime`.
    - After attaching `AmazonBedrockMantleInferenceAccess` to the IAM user, mantle's open-weight models worked in Sydney, with tool calling, through the OpenAI-compatible API and a short-term Bedrock token.
    - GPT-5.6 on mantle is separately restricted ("not available for this account").
+6. **gpt-oss-120b quirks found in testing:**
+   - With a big schema it sometimes **writes the JSON as text** instead of calling the `RepoAnalysis` tool, so `structured_response` comes back empty. Fix: tell it in the prompt to finish by calling the tool, and add a code fallback that pulls the `{...}` out of the text and validates it with Pydantic.
+   - It sometimes calls a non-existent tool **`search`** (a habit from its own built-in browser tool). Fix: list the allowed tools in the prompt.
+   - Its total score didn't always match its own breakdown. Fix: the score is computed in code.
 
 ## Verification
 - Each module has an `if __name__ == "__main__":` smoke test that's run as its step is finished.
