@@ -120,7 +120,8 @@ Stretch goals: re-analyse after N days or when stars jump; LangSmith tracing (le
 - [x] **Step 2:** `agent/llm.py`: `get_model()` returns `ChatOpenAI` pointed at mantle, gpt-oss-120b; the first call used 77 input + 82 output tokens.
 - [x] **Step 5:** `agent/researcher.py`, the first agent. Calls get_repo_info, get_readme, web_search; the third search was blocked by `ToolCallLimitMiddleware`. About 13k input tokens over 6 calls.
 - [x] **Step 6b:** structured `RepoAnalysis` with computed score, rubric prompt, text-JSON fallback, license taken from GitHub. Scores vary between runs (sherlock 7-8, mujoco 6-9): sampling plus different search results.
-- [ ] **Step 9:** `main.py` with the real agent (next). Tested on a scratch database: `--limit 2` analysed 2 repos in 54 s; a same-day re-run with `--limit 1` added 1, and the report held all 3.
+- [x] **Step 9:** `main.py`, the real daily run. 2026-11-11: 12/12 trending repos researched over incremental runs, 0 failed; `reports/2026-11-11.pdf`.
+- [ ] **Step 11:** README (next).
 
 ## Setup issues and lessons learned
 These are worth keeping for the README:
@@ -140,7 +141,8 @@ These are worth keeping for the README:
    - Changing region didn't help. In us-west-2 the quotas showed the full defaults (Nova 2 Lite 11.5B tokens/day), yet calls were still throttled, so the block is account-level on `bedrock-runtime`.
    - After attaching `AmazonBedrockMantleInferenceAccess` to the IAM user, mantle's open-weight models worked in Sydney, with tool calling, through the OpenAI-compatible API and a short-term Bedrock token.
    - GPT-5.6 on mantle is separately restricted ("not available for this account").
-6. **gpt-oss-120b quirks found in testing:**
+6. **Scores run too high (2026-11-11, first full day):** 9 of 12 repos came out "strong", 0 "none", even though the prompt says strong should be rare. Three were prompt/skill collections that the model labelled "tool" instead of "list", so the code cap never applied. The rubric and computed score make each score consistent and explained, but the judgments themselves are generous. Next: a code rule for Markdown-only repos, and a proper evaluation (human labels for these 12, then measure agreement) in the eval_and_observability project.
+7. **gpt-oss-120b quirks found in testing:**
    - With a big schema it sometimes **writes the JSON as text** instead of calling the `RepoAnalysis` tool, so `structured_response` comes back empty. Fix: tell it in the prompt to finish by calling the tool, and add a code fallback that pulls the `{...}` out of the text and validates it with Pydantic.
    - It sometimes calls a non-existent tool **`search`** (a habit from its own built-in browser tool). Fix: list the allowed tools in the prompt.
    - Its total score didn't always match its own breakdown. Fix: the score is computed in code.
