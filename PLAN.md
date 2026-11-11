@@ -119,8 +119,8 @@ Stretch goals: re-analyse after N days or when stars jump; LangSmith tracing (le
 - [x] **Step 10:** `reporting/pdf_report.py`: summary table, a page per repo, a seen/failed page. DejaVu fonts in `assets/fonts/`; `clean()` normalises full-width characters (NFKC) and strips CJK and emoji.
 - [x] **Step 2:** `agent/llm.py`: `get_model()` returns `ChatOpenAI` pointed at mantle, gpt-oss-120b; the first call used 77 input + 82 output tokens.
 - [x] **Step 5:** `agent/researcher.py`, the first agent. Calls get_repo_info, get_readme, web_search; the third search was blocked by `ToolCallLimitMiddleware`. About 13k input tokens over 6 calls.
-- [ ] **Step 6b:** structured output, rubric, computed score (next). Tested on 4 repos; scores now differ (for example skills 6, sherlock 7-8).
-- [ ] **Step 9:** `main.py`. Design kept from the fake-analyser test: the analyser is passed into `run()`, each repo is in its own try/except, the repo name is overwritten with the known value, a same-day re-run keeps that day's analyses in the report, and our logger runs at INFO while libraries stay at WARNING. `clean()` also needs NFKC normalisation and the full-width range, because full-width '：，' were missing glyphs.
+- [x] **Step 6b:** structured `RepoAnalysis` with computed score, rubric prompt, text-JSON fallback, license taken from GitHub. Scores vary between runs (sherlock 7-8, mujoco 6-9): sampling plus different search results.
+- [ ] **Step 9:** `main.py` with the real agent (next). Tested on a scratch database: `--limit 2` analysed 2 repos in 54 s; a same-day re-run with `--limit 1` added 1, and the report held all 3.
 
 ## Setup issues and lessons learned
 These are worth keeping for the README:

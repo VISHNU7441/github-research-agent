@@ -5,6 +5,7 @@ seen on earlier days and any that failed. Everything shown comes from
 RepoAnalysis objects and the history database.
 """
 import re
+import unicodedata
 from pathlib import Path
 
 from fpdf import FPDF
@@ -18,13 +19,14 @@ FONT = "DejaVu"
 VERDICT_COLORS = {"strong": (22, 128, 61), "maybe": (180, 110, 0), "none": (120, 120, 120)}  # green, amber, grey
 
 # Characters DejaVu Sans can't draw: Chinese/Japanese/Korean text and emoji.
-_UNDRAWABLE = re.compile("[\u3000-\u9fff\uac00-\ud7af\uf900-\ufaff\ufe0f\U00010000-\U0010ffff]")
+_UNDRAWABLE = re.compile("[\u3000-\u9fff\uac00-\ud7af\uf900-\ufaff\ufe0f\uff00-\uffef\U00010000-\U0010ffff]")
 
 
 def clean(text) -> str:
     """Remove characters the font can't draw and tidy the spacing left behind."""
-    text = " ".join(_UNDRAWABLE.sub("", str(text)).split())
-    return re.sub(r"\s+([.,;:!?])", r"\1", text)  # "projects ." -> "projects."
+    text = unicodedata.normalize("NFKC", str(text))   # full-width "：，" -> normal ":,"
+    text = " ".join(_UNDRAWABLE.sub("", text).split())
+    return re.sub(r"\s+([.,;:!?])", r"\1", text)
 
 
 class Report(FPDF):
@@ -115,6 +117,10 @@ def _repo_page(pdf: Report, a: RepoAnalysis):
     pdf.set_text_color(0)
     pdf.para(f"Category: {a.category}   |   License: {a.license} ({a.license_commercial})", size=9)
 
+    b = a.score_breakdown
+    pdf.para(f"Score breakdown: pain {b.pain}/3  |  buyer {b.buyer}/2  |  maturity {b.maturity}/2  |  "
+             f"room {b.room}/2  |  license {b.license}/1", size=9)
+
     pdf.h2("Business idea")
     pdf.para(a.business_idea)
     pdf.para(f"Product type: {a.product_type}", size=9)
@@ -172,7 +178,7 @@ def build_report(day: str, analyses: list[RepoAnalysis], seen: list[dict], trend
 
 
 if __name__ == "__main__":
-    from agent.schemas import TargetCustomer
+    from agent.schemas import TargetCustomer, ScoreBreakdown
 
     # Hand-written sample data (no model involved). Note the emoji and
     # Chinese characters: clean() removes them so the font never fails.
@@ -180,7 +186,7 @@ if __name__ == "__main__":
         repo="sherlock-project/sherlock",
         one_line_summary="A command-line tool that finds accounts with a given username across 400+ social networks.",
         category="tool", license="MIT License (MIT)", license_commercial="permissive",
-        verdict="maybe", opportunity_score=6,
+        score_breakdown=ScoreBreakdown(pain=2, buyer=2, maturity=1, room=0, license=1),
         business_idea="A hosted username-monitoring service with an API, scheduled scans and alerts, "
                       "so teams don't have to run and maintain the CLI themselves.",
         product_type="hosted SaaS + paid API",
@@ -198,7 +204,7 @@ if __name__ == "__main__":
         repo="example/awesome-ai-agents",
         one_line_summary="A curated list of links to AI agent projects 股票.",
         category="list", license="NOT DETECTED by GitHub", license_commercial="unknown",
-        verdict="none", opportunity_score=1,
+        score_breakdown=ScoreBreakdown(pain=0, buyer=0, maturity=0, room=0, license=0),
         business_idea="None: it is a list of links, there is no software to build a product on.",
         product_type="-", target_customers=[], competitors=[], risks=[],
         evidence=["get_readme: only links, no code", "list_files: README.md only"],

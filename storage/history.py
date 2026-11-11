@@ -6,7 +6,7 @@ so the model only spends tokens on new ones.
 import sqlite3
 from pathlib import Path
 
-from agent.schemas import RepoAnalysis
+from agent.schemas import RepoAnalysis, ScoreBreakdown
 from config import DB_PATH
 from sources.trending import TrendingRepo
 
@@ -96,7 +96,8 @@ if __name__ == "__main__":
         return RepoAnalysis(
             repo=name, one_line_summary="Test summary.", category="tool",
             license="MIT License (MIT)", license_commercial="permissive",
-            verdict="maybe", opportunity_score=6, business_idea="Test idea.",
+            score_breakdown=ScoreBreakdown(pain=2, buyer=2, maturity=1, room=0, license=1),
+            business_idea="Test idea.",
             product_type="hosted SaaS", target_customers=[], competitors=[], risks=[], evidence=[],
         )
 
